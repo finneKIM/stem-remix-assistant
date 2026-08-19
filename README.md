@@ -20,6 +20,7 @@ docs/
   PROPOSAL.md               # 기획서
   ENVIRONMENT_SETUP.md      # 환경 세팅 가이드
   troubleshooting/          # 트러블슈팅 기록 (문제-원인-해결 md, 날짜별)
+  samples/                  # 데모 오디오 샘플 (생성/분리 검증 결과물)
 notebooks/                  # Colab 노트북
 src/                        # 파이프라인 코드
 ```
@@ -27,9 +28,9 @@ src/                        # 파이프라인 코드
 ## 진행 상태
 
 - [x] 기획 완료
-- [ ] 환경 세팅 (Colab, AudioCraft, Demucs)
-- [ ] 생성 파이프라인 구현
-- [ ] 분리 파이프라인 구현
+- [x] 환경 세팅 (Colab, AudioCraft, Demucs)
+- [x] MusicGen 단독 생성 검증 (GPU 동작 확인)
+- [x] Demucs 단독 분리 검증
 - [ ] 재생성/재조합 로직 구현
 - [ ] 정량 평가 지표 구현
 - [ ] 결과 정리

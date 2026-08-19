@@ -4,3 +4,6 @@ __pycache__/
 *.wav
 *.mp3
 .env
+
+# 데모 샘플은 예외로 추적 (docs/PROPOSAL.md 7. 산출물 참고)
+!docs/samples/*.wav
