@@ -3,26 +3,32 @@ name: musicongen-pipeline
 description: >
   재생성 대상 스템을 MusiConGen(BPM·코드 명시적 조건화)으로 생성한 뒤
   Demucs 재분리, madmom 기반 Alignment Engine으로 보정.
-status: planned
-date: null
+status: in_progress
+date: 2026-08-28
 notebook: notebooks/02a_regenerate_musicongen.ipynb
 
-analysis:
+analysis: 
   tool: madmom
   extracts: [bpm, beat, onset, chord]
 
 generation:
   model: MusiConGen
+  checkpoint: https://huggingface.co/Cyan0731/MusiConGen (compression_state_dict.bin, state_dict.bin)
   conditioning: [bpm, chord, text_prompt]
   reference_audio: false
+  gpu_requirement: "12GB+ VRAM 권장 (Colab 무료 T4 16GB로 충족)"
 
 alignment:
   steps: [beat_align, transient_align, time_stretch]
 
-target_stem: null      # 예: drums
-prompt: null            # 예: "punchier trap-style drums, same tempo"
-duration_sec: null
-seed: null
+target_stem: drums
+prompt: "punchier trap-style drums, same tempo"
+
+# duration_sec, seed 최적값 탐색 (2026-08-28 TODO)
+# seed는 스윕 전 구간 동일 조건 고정, duration_sec만 최소/중간/최대로 스윕
+duration_sec: null          # 스윕 완료 후 최적값 기록
+duration_sec_sweep: [10, 15, 20]
+seed: 42
 
 evaluation:
   metrics: [bpm_error, beat_alignment, onset_alignment, chord_consistency]
