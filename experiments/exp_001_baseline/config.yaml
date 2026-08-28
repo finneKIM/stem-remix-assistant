@@ -1,0 +1,29 @@
+experiment_id: EXP-001
+name: baseline
+description: >
+  MusicGen 단독 생성과 Demucs 단독 분리가 예산 0원, Colab 무료 T4 환경에서
+  end-to-end로 동작하는지 검증. 재생성/재조합 로직은 포함하지 않음.
+status: completed
+date: 2026-08-14
+notebook: notebooks/01_setup_and_test.ipynb
+
+generation:
+  model: facebook/musicgen-stereo-medium
+  prompt: "lofi hiphop with mellow piano, 90 BPM, warm and relaxed"
+  duration_sec: 15
+  seed: null
+
+separation:
+  model: htdemucs
+  stems: [drums, bass, vocals, other]
+
+environment:
+  platform: Google Colab (무료 티어)
+  gpu: T4
+
+outputs:
+  - docs/samples/draft_0.wav
+  - docs/samples/drums.wav
+  - docs/samples/bass.wav
+  - docs/samples/vocals.wav
+  - docs/samples/other.wav

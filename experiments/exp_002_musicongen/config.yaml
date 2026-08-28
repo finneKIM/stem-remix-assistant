@@ -1,0 +1,29 @@
+experiment_id: EXP-002
+name: musicongen-pipeline
+description: >
+  재생성 대상 스템을 MusiConGen(BPM·코드 명시적 조건화)으로 생성한 뒤
+  Demucs 재분리, madmom 기반 Alignment Engine으로 보정.
+status: planned
+date: null
+notebook: notebooks/02a_regenerate_musicongen.ipynb
+
+analysis:
+  tool: madmom
+  extracts: [bpm, beat, onset, chord]
+
+generation:
+  model: MusiConGen
+  conditioning: [bpm, chord, text_prompt]
+  reference_audio: false
+
+alignment:
+  steps: [beat_align, transient_align, time_stretch]
+
+target_stem: null      # 예: drums
+prompt: null            # 예: "punchier trap-style drums, same tempo"
+duration_sec: null
+seed: null
+
+evaluation:
+  metrics: [bpm_error, beat_alignment, onset_alignment, chord_consistency]
+  human_eval: null
