@@ -1,0 +1,13 @@
+# 텍스트 파일은 저장소 안에서 항상 LF로 정규화, 체크아웃 시 OS에 맞게 표시
+* text=auto eol=lf
+
+# 오디오/노트북 등 바이너리 취급 파일 — 줄바꿈 변환 대상에서 제외
+*.wav binary
+*.mp3 binary
+*.flac binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+
+# 스크립트류는 LF 고정 (Windows에서 열어도 셸 실행 호환)
+*.sh text eol=lf
