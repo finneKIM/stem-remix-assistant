@@ -12,6 +12,8 @@
 
 - [01_setup_and_test.ipynb](notebooks/01_setup_and_test.ipynb) — 환경 확인, MusicGen 단독 생성, Demucs 단독 분리 테스트
   [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/finneKIM/stem-remix-assistant/blob/main/notebooks/01_setup_and_test.ipynb)
+- [02a_regenerate_musicongen.ipynb](notebooks/02a_regenerate_musicongen.ipynb) — EXP-002, MusiConGen 재생성 파이프라인(생성 → Demucs 재분리 → Alignment Engine), duration_sec 스윕 실험
+  [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/finneKIM/stem-remix-assistant/blob/main/notebooks/02a_regenerate_musicongen.ipynb)
 
 ## 폴더 구조
 
