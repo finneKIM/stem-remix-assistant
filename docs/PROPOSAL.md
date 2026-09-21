@@ -2,7 +2,7 @@
 
 > 원하는 분위기의 음악을 생성하고, 스템 단위로 분리한 뒤, 마음에 들지 않는 파트만 재생성해 교체하는 반복적 음악 창작 도구
 >
-> 작성자: 김하나 | 최종 수정: 2026-08-26 | 상태: 재생성/재조합 파이프라인 A/B 비교 실험 진행 중 (EXP-002, EXP-003)
+> 작성자: finn | 최종 수정: 2026-09-21 | 상태: 재생성/재조합 파이프라인 A/B 비교 실험 진행 중 (EXP-002, EXP-003)
 
 ---
 
@@ -62,13 +62,27 @@
 - **파이프라인 A — MusiConGen**: BPM·코드를 명시적으로 강제해 타이밍 정확도가 높다. 원곡 오디오를 직접 참조하지 않아 멜로디·음색의 원곡 유사성은 낮을 수 있다.
 - **파이프라인 B — MusicGen-Melody/Style**: 원곡 오디오를 직접 참조해 멜로디·음색의 원곡 유사성이 높다. BPM은 텍스트 프롬프트 삽입 수준의 약한 신호라 타이밍 정확도는 상대적으로 낮을 수 있다.
 
-두 파이프라인 모두 Demucs(분리) + madmom(비트/온셋/다운비트/코드 분석) + 사용자 프롬프트를 공통 입력으로 받고, 생성 결과를 Alignment Engine(Beat Align / Transient Align / Time Stretch)에서 원곡과 타이밍을 맞춘 뒤 FINAL STEM으로 산출한다(4.1절 참고).
+두 파이프라인 모두 Demucs(분리) + 비트/온셋/다운비트/코드 분석 + 사용자 프롬프트를 공통 입력으로 받고, 생성 결과를 Alignment Engine(Beat Align / Transient Align / Time Stretch)에서 원곡과 타이밍을 맞춘 뒤 FINAL STEM으로 산출한다(4.1절 참고).
+
+#### 2.3.1 분석 도구 전환: madmom → librosa + BTC-ISMIR2019 (2026-09-21)
+
+당초 비트/온셋/다운비트/코드 분석을 madmom 하나로 전부 처리하도록 설계했으나(2026-08-26 확정), 실제 구현 단계에서 madmom이 Python 3.13 / numpy 2.5.3 환경과 구조적으로 비호환임을 확인했다. `collections.MutableSequence`(Python 3.10+ 제거된 문법), `np.float` 등 제거된 numpy 별칭(97건/19개 파일), 그리고 Cython으로 컴파일된 바이너리 확장이 최신 환경에서 재컴파일을 요구할 잠재적 리스크까지 겹쳐, 패치를 계속하는 쪽의 비용과 불확실성이 크다고 판단했다.
+
+전환에 앞서 MusiConGen 원작 저장소([YatingMusic/MusiConGen](https://github.com/YatingMusic/MusiConGen))를 다시 확인한 결과, 원작자도 코드 인식에 madmom을 쓰지 않는다는 것을 확인했다. 코드 진행 추출은 [BTC-ISMIR2019](https://github.com/jayg996/BTC-ISMIR19)(Bi-Directional Transformer 기반 코드 인식 모델)를 사용하고, 비트/다운비트는 BeatNet 또는 madmom 중 택1(옵션)로 되어 있었다. 즉 madmom을 비트·코드 전부를 처리하는 단일 도구로 쓰기로 한 것은 이번 프로젝트만의 설계였을 뿐, MusiConGen 자체의 요구사항은 아니었다.
+
+이에 따라 분석 도구를 다음과 같이 기능별로 분리해 전환했다(원작 설계와 정합).
+
+- 비트/온셋/다운비트 → **librosa**
+- 코드 진행 → **BTC-ISMIR2019**
+
+BTC-ISMIR2019는 순수 PyTorch 기반 트랜스포머 모델이라 C 확장/Cython 컴파일이 불필요해, madmom 대비 바이너리 호환성 리스크가 낮다. 실제 검증에서도 이 판단이 확인되었다 — 발생한 문제는 `yaml.load()`의 `Loader` 인자 누락(PyYAML 5.1+ 변경), `np.float` 등 제거된 numpy 별칭(12건/3개 파일, madmom의 1/8 규모), `torch.load()`의 `weights_only` 기본값 변경(PyTorch 2.6+) 세 가지뿐이었고, 전부 한 줄 패치로 해결되어 원곡(`draft_0.wav`)에서 실제 코드 진행(`.lab`, `.midi`) 추출까지 성공했다.
 
 **여전히 남아 있는 한계** (기획 단계에서 미리 인정하는 부분):
 1. 두 파이프라인 모두 재생성 결과가 원곡과 템포·키·타이밍에서 완벽히 일치한다는 보장은 없다. Alignment Engine이 이를 보정하지만 완전한 싱크를 보장하지 않는다.
 2. "자연스러운 블렌딩"이 이상적인 방식(스템 조건부 생성)만큼 매끄럽지 않을 가능성이 높고, 이는 정량적으로 측정해야 할 부분이다(4.3절 평가 지표 참고).
 3. MusicGen·MusiConGen 가중치가 각각 CC-BY-NC 등 비상업 라이선스 제약을 받으므로, 이 파이프라인들은 비상업적 데모/포트폴리오 용도로 한정된다.
 4. 두 파이프라인을 병행 구현·검증하는 데 드는 시간이 단일 파이프라인 대비 늘어난다. 이는 "어느 쪽이 더 중요한 속성인지" 자체가 사전에 판단 불가능한 트레이드오프였기 때문에 감수하는 비용으로 본다.
+5. BTC-ISMIR2019는 2019년 코드베이스라 최신 라이브러리 환경과의 호환성 패치가 필요했다(위 2.3.1절). 향후 환경이 다시 바뀌면(예: 다음 PyTorch/PyYAML 메이저 버전) 유사한 패치가 재발할 수 있다.
 
 프로젝트 README와 최종 보고서에 그대로 남기는 것이라는 기획 원칙에 따라 완벽한 결과보다 한계를 인지하고 이를 우회하거나 측정한 과정을 보여주는 것이 목적에 더 부합한다.
 
@@ -94,7 +108,7 @@
 
 ### 4.1 전체 흐름
 
-1~3단계(프롬프트 입력 → MusicGen 초안 생성 → Demucs 4-스템 분리)는 기획 초안과 동일하게 유지한다. 4~8단계(재생성·재조합)는 2.3절의 A/B 비교 결정에 따라 아래처럼 다시 설계했다(2026-08-26 확정, 상세 다이어그램은 Notion "02번 노트북" 페이지).
+1~3단계(프롬프트 입력 → MusicGen 초안 생성 → Demucs 4-스템 분리)는 기획 초안과 동일하게 유지한다. 4~8단계(재생성·재조합)는 2.3절의 A/B 비교 결정에 따라 아래처럼 다시 설계했다(2026-08-26 확정, 분석 도구는 2026-09-21 madmom → librosa+BTC-ISMIR2019로 전환. 상세 다이어그램은 Notion "02번 노트북" 페이지).
 
 ```
 [1] 사용자 프롬프트 입력
@@ -106,7 +120,7 @@
 [4] 사용자가 마음에 안 드는 스템을 지정 (예: "드럼이 별로야")
       ↓
 [5] 세 입력이 독립적으로 결합:
-      Demucs(분리 결과) + madmom(비트/온셋/다운비트/코드 분석) + 사용자 재생성 프롬프트
+      Demucs(분리 결과) + librosa(비트/온셋/다운비트) + BTC-ISMIR2019(코드 진행) + 사용자 재생성 프롬프트
       ↓
 [6] 재생성 — 두 파이프라인을 각각 실행해 비교(A/B)
       파이프라인 A: MusiConGen (BPM·코드 명시적 강제)
@@ -130,7 +144,7 @@ Alignment Engine과 Recombination은 서로 다른 단계다 — Alignment Engin
 - **분리**: Demucs (사전학습 `htdemucs` 모델)
 - **재생성 — 파이프라인 A**: MusiConGen ([YatingMusic/MusiConGen](https://github.com/YatingMusic/MusiConGen), BPM·코드 조건부 생성)
 - **재생성 — 파이프라인 B**: MusicGen-Melody / MusicGen-Style (레퍼런스 오디오 조건부 생성)
-- **분석/정렬**: madmom (비트·온셋·다운비트·코드 분석), 정렬 보정에 타임스트레칭 적용
+- **분석/정렬**: librosa(비트·온셋·다운비트 분석) + BTC-ISMIR2019(코드 진행 인식, [jayg996/BTC-ISMIR19](https://github.com/jayg996/BTC-ISMIR19)), 정렬 보정에 타임스트레칭 적용
 - **실행 환경**: Google Colab 무료 티어 (T4 GPU)
 - **개발 도구**: Claude Code (파이프라인 스크립트 작성, 디버깅, 실험 기록)
 - **데이터**: OnAir Music Dataset(데모/검증용), 필요시 MUSDB18(정량 평가용, 승인 후)
@@ -139,9 +153,10 @@ Alignment Engine과 Recombination은 서로 다른 단계다 — Alignment Engin
 
 이상적인 스템 조건부 생성과 비교할 정답 데이터가 없으므로, 완전한 정답 비교는 불가능하다. 대신 다음을 측정해 파이프라인 A/B를 비교한다(측정 항목·실험 설정은 `experiments/README.md`와 각 실험 폴더의 `config.yaml` 참고).
 
-- **BPM 오차**: madmom으로 측정한 원곡 BPM과 재생성 스템 BPM의 차이
-- **Beat alignment**: 원곡과 재생성 스템의 비트 그리드 일치도
-- **Onset alignment**: 원곡과 재생성 스템의 온셋(타격 시점) 일치도
+- **BPM 오차**: librosa로 측정한 원곡 BPM과 재생성 스템 BPM의 차이
+- **Beat alignment**: 원곡과 재생성 스템의 비트 그리드 일치도(librosa 비트 추적 기반)
+- **Onset alignment**: 원곡과 재생성 스템의 온셋(타격 시점) 일치도(librosa 온셋 검출 기반)
+- **코드 진행 일치도**: BTC-ISMIR2019로 추출한 원곡/재생성 스템의 코드 시퀀스 비교
 - **청취 평가**: 직접 들었을 때 원곡과 자연스럽게 어울리는지에 대한 주관 평가(파이프라인 A/B 비교표는 `docs/experiments/model_comparison.md`에 기록)
 
 ---
@@ -153,9 +168,10 @@ Alignment Engine과 Recombination은 서로 다른 단계다 — Alignment Engin
 | 1주차 | 환경 세팅 (Colab, AudioCraft, Demucs), MusicGen 단독 생성 테스트 | 완료 |
 | 1~2주차 | Demucs 분리 파이프라인 구축, MusicGen 단독 생성 검증 (EXP-001 베이스라인) | 완료 |
 | 2~3주차 | 재생성/재조합 로직 설계 확정 (파이프라인 A/B 결정, 2026-08-26), 실험 프레임워크 구축 | 완료 |
-| 2~3주차 | 파이프라인 A(MusiConGen, EXP-002) · 파이프라인 B(MusicGen-Melody/Style, EXP-003) 구현 및 재조합 로직 구현 | 진행 중 |
-| 3주차 | 정량 평가 지표 구현 및 측정, A/B 비교(`docs/experiments/model_comparison.md`) | 예정 |
-| 4주차 | 결과 정리, README/포트폴리오 문서화, GitHub 공개 | 예정 |
+| 3주차 | MusiConGen 환경 구축 및 텍스트 프롬프트 생성 검증, 분석 도구 madmom → librosa+BTC-ISMIR2019 전환 및 검증 (2026-09-21) | 완료 |
+| 3~4주차 | 파이프라인 A(MusiConGen, EXP-002) · 파이프라인 B(MusicGen-Melody/Style, EXP-003) 구현 및 재조합 로직 구현 | 진행 중 |
+| 4주차 | 정량 평가 지표 구현 및 측정, A/B 비교(`docs/experiments/model_comparison.md`) | 예정 |
+| 5주차 | 결과 정리, README/포트폴리오 문서화, GitHub 공개 | 예정 |
 
 *(실제 진행하면서 조정 — 각 단계에서 막히는 지점과 해결 과정은 `docs/troubleshooting/`에, 실험별 결과·결론은 `experiments/`의 각 실험 폴더 README.md에 별도로 기록)*
 
@@ -167,8 +183,9 @@ Alignment Engine과 Recombination은 서로 다른 단계다 — Alignment Engin
 |---|---|
 | 재생성 스템과 원곡 스템의 템포/키 불일치가 심함 | Alignment Engine(Beat Align / Transient Align / Time Stretch)으로 후처리 보정, 파이프라인 A(MusiConGen)로 BPM·코드를 애초에 강제해 불일치 폭 자체를 줄임 |
 | 두 파이프라인(A/B) 중 무엇이 더 나은지 판단 기준이 모호함 | 정량 지표(BPM 오차, beat/onset alignment)와 청취 평가를 병행해 `docs/experiments/model_comparison.md`에 근거를 남기고 비교 |
-| Colab 무료 티어 세션/시간 제한으로 작업 중단 | 중간 산출물(생성된 트랙, 분리된 스템)을 매 단계 로컬/Drive에 저장해 재개 가능하게 설계 |
+| Colab 무료 티어 세션/시간 제한으로 작업 중단 | 중간 산출물(생성된 트랙, 분리된 스템, 분석 결과)을 매 단계 Drive에 저장해 재개 가능하게 설계 |
 | MusicGen/MusiConGen 대형 모델이 무료 GPU에서 메모리 부족 | `medium` 이하 모델로 축소, 생성 길이를 짧게(30~60초) 제한 |
+| 분석 라이브러리가 최신 Python/numpy 환경과 비호환 | madmom에서 이미 겪은 문제(Python 3.13/numpy 2.5.3 비호환) — 순수 Python/PyTorch 기반 라이브러리(librosa, BTC-ISMIR2019)로 전환해 Cython/C 확장 의존성을 최소화 |
 | 정량 평가가 기대만큼 의미 있는 수치를 못 줌 | 정량 지표를 보조 수단으로 두고, 재생성 전후 비교 샘플을 직접 제시하는 정성적 근거를 병행 |
 
 ---
@@ -193,4 +210,5 @@ Alignment Engine과 Recombination은 서로 다른 단계다 — Alignment Engin
 - [Stemphonic (arXiv 2602.09891)](https://arxiv.org/abs/2602.09891)
 - [MusiConGen: Rhythm and Chord Control for Transformer-Based Text-to-Music Generation (arXiv 2407.15060)](https://arxiv.org/abs/2407.15060)
 - [MusiConGen - GitHub (YatingMusic)](https://github.com/YatingMusic/MusiConGen)
-- [madmom: A New Python Audio and Music Signal Processing Library (arXiv 1605.07008)](https://arxiv.org/abs/1605.07008)
+- [BTC-ISMIR19: A Bi-Directional Transformer for Musical Chord Recognition - GitHub (jayg996)](https://github.com/jayg996/BTC-ISMIR19)
+- [librosa documentation](https://librosa.org/doc/latest/index.html)
