@@ -1,35 +1,56 @@
 experiment_id: EXP-002
 name: musicongen-pipeline
 description: >
-  재생성 대상 스템을 MusiConGen(BPM·코드 명시적 조건화)으로 생성한 뒤
-  Demucs 재분리, madmom 기반 Alignment Engine으로 보정.
+  BPM/코드 조건부 생성이 가능한 MusiConGen으로 원곡 전체 백킹트랙을
+  재생성한 뒤 Demucs로 재분리하고, madmom 기반 Alignment Engine으로
+  타이밍을 보정한다. target_stem은 생성 조건이 아니라 재분리 이후
+  추출할 스템을 가리키는 라벨이다 (PROPOSAL.md 2.3, 4.1 참고).
 status: in_progress
 date: 2026-08-28
+last_updated: 2026-10-02
 notebook: notebooks/02a_regenerate_musicongen.ipynb
 
-analysis: 
+analysis:
   tool: madmom
   extracts: [bpm, beat, onset, chord]
+  source: original_track   # BPM/코드는 원곡에서 1회 추출해 생성 조건으로 사용
 
 generation:
   model: MusiConGen
   checkpoint: https://huggingface.co/Cyan0731/MusiConGen (compression_state_dict.bin, state_dict.bin)
-  conditioning: [bpm, chord, text_prompt]
+  conditioning: [bpm, chord, text_prompt]   # 원곡 전체 트랙 대상 조건부 생성 (스템 단위 아님)
+  output: full_backing_track
   reference_audio: false
   gpu_requirement: "12GB+ VRAM 권장 (Colab 무료 T4 16GB로 충족)"
+
+post_separation:
+  tool: demucs
+  note: MusiConGen이 생성한 전체 트랙을 재분리해 4-스템으로 나눈다.
 
 alignment:
   steps: [beat_align, transient_align, time_stretch]
 
-target_stem: drums
-prompt: "punchier trap-style drums, same tempo"
+target_stem: drums   # 생성 조건 아님 — post_separation 이후 추출할 스템 라벨
+prompt: "punchier trap-style drums, same tempo"  # TODO: 전체 트랙 생성에 맞는 프롬프트로 재검토 필요
 
 # duration_sec, seed 최적값 탐색 (2026-08-28 TODO)
-# seed는 스윕 전 구간 동일 조건 고정, duration_sec만 최소/중간/최대로 스윕
-duration_sec: null          # 스윕 완료 후 최적값 기록
+# 2026-10-02: 1차 검증은 draft_0.wav(EXP-001 산출물) 길이에 맞춰 15초로 고정해 진행 중.
+# EXP-002가 15초에서 통과하면 EXP-001을 30초로 재실행 후 재검증한다 (조건부, 미확정).
+duration_sec: 15
 duration_sec_sweep: [10, 15, 20]
 seed: 42
 
 evaluation:
   metrics: [bpm_error, beat_alignment, onset_alignment, chord_consistency]
   human_eval: null
+
+known_issues:
+  - date: 2026-10-02
+    issue: >
+      초기 구현에서 target_stem(drums)을 MusiConGen 생성 조건으로 직접
+      전달해 드럼 전용 생성을 시도했으나 음질 저하가 발생했다. MusiConGen
+      계열 모델은 스템 단위 생성을 지원하지 않아 구조적으로 불가능한
+      접근이었다.
+    fix: >
+      전체 트랙 생성 → Demucs 재분리 → target_stem 추출 구조로 정정
+      (PROPOSAL.md 2.3, 4.1). 상세: docs/troubleshooting/20261002_musicongendrumstemqualitydegradation.md
