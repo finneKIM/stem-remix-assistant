@@ -12,23 +12,27 @@
 
 ```mermaid
 flowchart TD
-    A[사용자 프롬프트 입력] --> B["MusicGen 초안 트랙 생성<br/>(EXP-001)"]
-    B --> C["Demucs 4-스템 분리<br/>(드럼·베이스·보컬·기타)"]
-    C --> D{재생성할 스템 지정}
-    D --> E["분석: librosa(비트·온셋·다운비트)<br/>+ BTC-ISMIR2019(코드 진행)"]
-    E --> F1["파이프라인 A: MusiConGen<br/>BPM·코드 명시적 조건화 (EXP-002)"]
-    E --> F2["파이프라인 B: MusicGen-Melody/Style<br/>원곡 오디오 직접 참조 (EXP-003)"]
-    F1 --> G["전체 트랙 재생성 → Demucs 재분리<br/>→ target_stem 추출"]
+    A[프롬프트 입력] --> B["MusicGen 생성<br/>(EXP-001)"]
+    B --> C["Demucs 분리<br/>(4-스템)"]
+    C --> D{재생성 스템 지정}
+    D --> E[분석: BPM·코드]
+    E --> F1["Pipeline A<br/>MusiConGen (EXP-002)"]
+    E --> F2["Pipeline B<br/>MusicGen-Melody (EXP-003)"]
+    F1 --> G["재생성 + 재분리<br/>target_stem 추출"]
     F2 --> G
-    G --> H["Alignment Engine<br/>Beat Align → Transient Align → Time Stretch"]
-    H --> I{품질 기준 통과?}
+    G --> H[Alignment Engine]
+    H --> I{QC Pass?}
     I -- 아니오 --> E
-    I -- 예 --> J["Recombination<br/>(유지할 원곡 스템 + FINAL STEM)"]
+    I -- 예 --> J[Recombination]
     J --> K[FINAL MIX]
-    K --> L["정량 지표 + 청취 비교로<br/>파이프라인 A/B 우열 판단"]
+    K --> L[A/B 비교 평가]
 ```
 
-> **Note**: `target_stem`은 생성 조건이 아니라 재분리 이후 추출할 스템을 가리키는 라벨이다. 생성 조건으로 직접 전달하면 음질이 저하된다 — 원인 분석과 해결 과정은 [`docs/troubleshooting/20261002_musicongendrumstemqualitydegradation.md`](docs/troubleshooting/20261002_musicongendrumstemqualitydegradation.md) 참고.
+분석은 librosa(비트·온셋·다운비트)와 BTC-ISMIR2019(코드 진행)를 쓰고, Demucs는 드럼·베이스·보컬·기타 4개 스템으로 분리한다. Alignment Engine은 Beat Align → Transient Align → Time Stretch 순으로 동작한다.
+
+> **Note**: `target_stem`은 생성 조건이 아니라 재분리 이후 추출할 스템을 가리키는 라벨이다. 생성 조건으로 직접 전달하면 음질이 저하된다.
+>
+> 원인 분석과 해결 과정은 [`docs/troubleshooting/20261002_musicongendrumstemqualitydegradation.md`](docs/troubleshooting/20261002_musicongendrumstemqualitydegradation.md) 참고.
 
 ## 노트북
 
