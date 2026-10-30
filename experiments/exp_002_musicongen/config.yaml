@@ -2,26 +2,39 @@ experiment_id: EXP-002
 name: musicongen-pipeline
 description: >
   BPM/코드 조건부 생성이 가능한 MusiConGen으로 원곡 전체 백킹트랙을
-  재생성한 뒤 Demucs로 재분리하고, madmom 기반 Alignment Engine으로
+  재생성한 뒤 Demucs로 재분리하고, Alignment Engine으로
   타이밍을 보정한다. target_stem은 생성 조건이 아니라 재분리 이후
   추출할 스템을 가리키는 라벨이다 (PROPOSAL.md 2.3, 4.1 참고).
+  2026-10-30: Alignment Engine의 madmom 의존을 librosa + BTC-ISMIR2019로 교체.
 status: in_progress
 date: 2026-08-28
-last_updated: 2026-10-02
+last_updated: 2026-10-30
 notebook: notebooks/02a_regenerate_musicongen.ipynb
 
 analysis:
-  tool: madmom
+  tool: librosa + BTC-ISMIR2019   # 2026-10-12 변경: madmom 설치 불가 (known_issues 참조)
   extracts: [bpm, beat, onset, chord]
   source: original_track   # BPM/코드는 원곡에서 1회 추출해 생성 조건으로 사용
+  constraints:
+    start_bpm_required: true   # librosa.beat.beat_track에 힌트 필수. 없으면 옥타브 오류
 
 generation:
   model: MusiConGen
   checkpoint: https://huggingface.co/Cyan0731/MusiConGen (compression_state_dict.bin, state_dict.bin)
-  conditioning: [bpm, chord, text_prompt]   # 원곡 전체 트랙 대상 조건부 생성 (스템 단위 아님)
+  conditioning: [bpm, beat, chord, text_prompt]   # 원곡 전체 트랙 대상 조건부 생성 (스템 단위 아님)
   output: full_backing_track
   reference_audio: false
   gpu_requirement: "12GB+ VRAM 권장 (Colab 무료 T4 16GB로 충족)"
+  cfg_coef: 1.5            # 2026-10-30 변경: 3.0 → 1.5. 잡음에는 무효하나 템포 오차를 9배 축소
+  sample_rate: 32000
+  frame_rate: 50           # = sample_rate / 640
+  license: CC-BY-NC        # 상업적 사용 불가
+  fuser_config:            # 2026-10-30 실측. 조건이 모델에 들어가는 경로
+    chord: [sum, prepend]
+    beat: [sum]
+    description: [prepend]
+    in_attn: true
+    training_dropout: 0.2
 
 post_separation:
   tool: demucs
@@ -31,18 +44,88 @@ alignment:
   steps: [beat_align, transient_align, time_stretch]
 
 target_stem: drums   # 생성 조건 아님 — post_separation 이후 추출할 스템 라벨
-prompt: "punchier trap-style drums, same tempo"  # TODO: 전체 트랙 생성에 맞는 프롬프트로 재검토 필요
+
+# 2026-10-30: 전체 트랙 생성에 맞는 프롬프트로 교체 (2026-08-28 TODO 해소).
+# 이전 값 "punchier trap-style drums, same tempo" 는 드럼 전용 생성을 전제한 것이었고,
+# 그 접근 자체가 2026-10-02에 구조적으로 불가능한 것으로 판정됐다 (known_issues).
+prompt: "lofi hiphop backing track with mellow piano, warm and relaxed. Instruments: piano, bass, drums."
 
 # duration_sec, seed 최적값 탐색 (2026-08-28 TODO)
 # 2026-10-02: 1차 검증은 draft_0.wav(EXP-001 산출물) 길이에 맞춰 15초로 고정해 진행 중.
 # EXP-002가 15초에서 통과하면 EXP-001을 30초로 재실행 후 재검증한다 (조건부, 미확정).
-duration_sec: 15
-duration_sec_sweep: [10, 15, 20]
+#
+# 2026-10-30: 위 조건부 계획을 폐기한다.
+#   15초는 ConditionFuser.prepend 결함 구간이다. duration 30초(= 1500프레임)가 아니면
+#   실제 조건이 CFG 드롭아웃으로 오판되어 prepend에 zeros 235개가 들어간다.
+#   기존 스윕 [10, 15, 20]은 세 값 전부 이 구간에 있었으므로 스윕 결과는 해석할 수 없다.
+#   "15초에서 통과하면" 이라는 전제 자체가 성립하지 않는다.
+#   EXP-001과의 길이 정합은 EXP-001을 30초로 재실행해 맞춘다 (역방향).
+duration_sec: 30
+duration_sec_sweep: [30]
+duration_constraint: >
+  30초 외의 길이는 사용하지 않는다. ConditionFuser.prepend가 조건 길이 1500을
+  CFG 드롭아웃 판별에 하드코딩하므로, 1500프레임이 아니면 조건이 무시된다.
+  known_issues 2026-10-30 항목 참조.
 seed: 42
+meter: 4
 
 evaluation:
+  # 원래 계획한 지표 — 아직 측정하지 못했다.
+  # 생성물 잡음이 심해 비트·코드 진행 판별 신뢰도를 확보하지 못했다.
   metrics: [bpm_error, beat_alignment, onset_alignment, chord_consistency]
-  human_eval: null
+  metrics_status: blocked   # 음질이 판별 가능 수준 미달. quality_metrics가 선행 조건
+
+  # 2026-10-30 추가: 음질 자체를 재는 지표. 위 metrics의 선행 조건.
+  quality_metrics: [flatness, hi8k, perc]
+  quality_metrics_note: >
+    세 개를 교차로 읽는다. cfg_coef 1.5 실험에서 flatness는 +2.0%(불변)였으나
+    perc는 -37.3%였다. 하나만 보면 "변화 없음" 또는 "37% 개선"으로 각각 오판한다.
+
+  function: src/audio_metrics.py::measure   # 단일 정의. 노트북에 복사 금지
+  hint_bpm: 89                              # 전 측정에 필수
+  record: metrics.csv                       # append-only. 기존 행을 고치지 않는다
+  baselines:
+    codec:    {flatness: 0.00451, hi8k: 0.0472}   # 원곡 EnCodec 왕복. 이론적 하한선
+    original: {flatness: 0.00679, hi8k: 0.0579}
+    control:  {flatness: 0.03212, hi8k: 0.1874}   # 저자 공식 설정 대조군. x_control의 분모
+
+  human_eval: listening_note   # 2026-10-30 변경: null → 필수.
+                               # 지표가 못 잡는 정보이고, 지표와 불일치할 때가 가장 중요한 단서다
+
+environment:
+  platform: google_colab       # 무료 T4. 로컬 환경은 지원하지 않는다
+  requirements: requirements.txt   # 2026-10-30 재검증. MusiConGen 자체 requirements.txt는 쓰지 않는다 (충돌)
+  budget_krw: 0
+
+# 2026-10-30 추가. known_issues는 문제-해결 쌍이라
+# "기각된 가설"이나 "통제 불가로 판정된 층"을 담지 못해 별도 키로 분리했다.
+findings:
+  noise_layers:
+    - layer: 1
+      cause: 체크포인트 고유 잡음
+      magnitude: 코덱 대비 5.3~7.1배
+      controllable: false
+      note: 저자 공식 설정을 그대로 돌려도 7.12배. 모델 교체 외 수단 없음
+    - layer: 2
+      cause: ConditionFuser.prepend의 하드코딩된 1500
+      magnitude: 추가 약 1.7배
+      controllable: true
+      status: resolved
+      evidence: 15초 → 30초 전환으로 flatness -41.8%, hi8k -26.7%
+    - layer: 3
+      cause: 조건 주입 초과분 (sum 경로 수치 스케일 추정)
+      magnitude: 추가 1.17배
+      controllable: unknown
+      status: backlog
+      evidence: >
+        beat output_proj std 0.56999 / absmax 1.0 vs description 0.01264, chord 0.02915.
+        약 50배 차. beat 입력값은 최대 1.9이고 오디오 토큰 임베딩에 직접 가산된다.
+      method: forward hook으로 sum 경로 가산 전후 텐서 크기 실측
+
+  rejected_hypotheses:
+    - duration / extend_stride / top_k / temperature / description 길이 — 저자 공식 설정 대조군 1회로 일괄 기각
+    - EnCodec 디코더 열화 — 원곡 왕복 flatness 0.00451 < 원곡 0.00679. 코덱 통과가 지표를 오히려 개선
+    - cfg_coef 3.0 증폭 — 사전 기준(flatness ±10%)대로 기각. 실측 +2.0%
 
 known_issues:
   - date: 2026-10-02
@@ -54,3 +137,51 @@ known_issues:
     fix: >
       전체 트랙 생성 → Demucs 재분리 → target_stem 추출 구조로 정정
       (PROPOSAL.md 2.3, 4.1). 상세: docs/troubleshooting/20261002_musicongendrumstemqualitydegradation.md
+
+  - date: 2026-10-12
+    issue: >
+      madmom 설치 불가. 제거된 numpy 별칭(np.float, np.int 등)을
+      19개 파일 97곳에서 참조한다.
+    fix: >
+      librosa(BPM·비트·온셋) + BTC-ISMIR2019(코드 인식) 조합으로 대체.
+      analysis.tool 값과 description을 함께 수정했다.
+
+  - date: 2026-10-30
+    issue: >
+      compression_state_dict.bin이 589바이트인 것을 파일 손상으로 판단해
+      수사 방향을 잃었다.
+    fix: >
+      손상이 아니다. facebook/encodec_32khz를 참조하는 포인터이며
+      HFEncodecCompressionModel로 로드되는 정상 설계다. 파일 크기로 판단하지 않는다.
+
+  - date: 2026-10-30
+    issue: >
+      librosa.beat.beat_track을 start_bpm 힌트 없이 호출해 템포가 옥타브
+      오류로 측정됐다. 코덱 왕복 음원이 89 대신 178.6 BPM으로 나와
+      "코덱이 템포를 망가뜨린다"는 오진으로 갈 뻔했다.
+    fix: >
+      전 측정에 hint_bpm을 넘긴다. src/audio_metrics.py::measure의 인자로 명시했다.
+
+  - date: 2026-10-30
+    issue: >
+      beat_gap = int(60/bpm*fs)의 정수 내림. int(60/89*50)=33이므로
+      실효 BPM은 50/33*60 = 90.91이 된다. 89를 넣어도 모델은 90.91로 연주한다.
+    fix: >
+      버그가 아니라 양자화의 필연적 결과다. 템포 오차는 목표값 89가 아니라
+      이론값 90.91을 기준으로 평가한다.
+
+  - date: 2026-10-30
+    issue: >
+      ConditionFuser.forward의 prepend 분기가 조건 길이 1500을 CFG 드롭아웃
+      판별에 하드코딩한다 (`if cond.shape[1] == 1500:  # if condition not dropout`).
+      학습 설정이 segment_duration 30 x frame_rate 50 = 1500이므로 학습 중에는
+      항상 1500이었다. 추론 시 15초(750프레임)를 넣으면 실제 조건이 드롭아웃으로
+      오판되어 prepend에 zeros 235개가 들어간다.
+      sum 분기에는 같은 검사가 없어, 코드 조건은 sum으로는 정상 주입되고
+      prepend로만 공백이 들어간다. 학습 중 한 번도 나타나지 않은 조합이다
+      (학습: 둘 다 실제 80% / 둘 다 없음 20%).
+      기존 duration_sec 15와 스윕 [10, 15, 20]이 전부 이 구간에 있었다.
+    fix: >
+      duration_sec을 30(= 1500프레임)으로 고정, duration_sec_sweep을 [30]으로 변경.
+      flatness 41.8%, hi8k 26.7% 감소를 측정으로 확인.
+      "15초에서 통과하면 EXP-001을 30초로 재실행" 조건부 계획은 폐기했다.
