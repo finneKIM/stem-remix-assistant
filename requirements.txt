@@ -1,0 +1,49 @@
+# =========================================================
+# MusiConGen requirements.txt - Colab (Python 3.13, torch 2.11+cu128) 검증판
+# 2026-09-21 1차 확정, 2026-10-02 pandas 누락 발견 후 추가.
+# 원본은 requirements.txt.orig_backup 참고.
+# =========================================================
+
+spacy
+transformers
+
+torch
+torchaudio
+
+xformers
+
+numpy
+
+# numba: librosa의 하위 의존성. 구버전은 numpy 2.x와 충돌 -> 최신 버전 명시
+numba>=0.67.0
+
+# pandas: 원본에 아예 없었으나 audiocraft/data/chords.py에서 실제 사용 (2026-09-21 grep 확인).
+#         2026-10-02: 이미 설치된 환경에서 pandas만 --no-deps로 재설치하다가
+#         numpy/numba ABI 불일치 + llvmlite 버전 불일치가 재발한 적 있음.
+#         requirements.txt 한 번에 설치하면 pip 리졸버가 호환 조합을 알아서 고르므로
+#         이 문제를 피할 수 있음. 버전 고정하지 않는다.
+pandas
+
+# hydra-core: 추론 경로(MusicGen.get_pretrained)엔 불필요 확인됨. train.py 재학습 시에만 설치.
+# hydra-core
+# hydra_colorlog
+
+flashy
+
+# av: Python 3.13처럼 비교적 최신 버전엔 사전빌드 wheel이 없어 조용히 설치 실패할 수 있음 (2026-10-02 확인).
+#     설치 직후 반드시 단독 셀에서 "import av"로 검증할 것 (quiet 일괄설치 로그만 보고 넘어가지 않기).
+av
+julius
+einops
+num2words
+sentencepiece
+tqdm
+demucs
+librosa
+soundfile
+torchmetrics
+encodec
+protobuf
+pesq
+pystoi
+pretty_midi
