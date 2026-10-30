@@ -1,12 +1,12 @@
 # 트러블슈팅 로그
 
-날짜별 묶음으로 작업 흐름 정리.
+날짜별 묶음으로 작업흐름 정리.
 
 | 날짜 | 묶음 | 건수 |
 |---|---|---|
 | 2026-09-21 | madmom → librosa + BTC-ISMIR2019 전환 과정 | 6 |
-| 2026-10-02 | MusiConGen 스템 단위 생성 시도 | 1 |
-| 2026-10-30 | 조건부 음악 생성의 음질 저하 원인 분해 | 6 |
+| 2026-10-02 | Colab 재연결 환경 복구 및 MusiConGen 드럼 스템 생성 시도 | 7 |
+| 2026-10-30 | 조건부 음악 생성의 음질 저하 원인 분해 | 5 |
 
 ---
 
@@ -37,30 +37,49 @@ madmom은 오래된 코드베이스(대략 Python 3.6~3.8 / numpy 1.x대 기준)
 
 ---
 
-## 2026-10-02 — MusiConGen 스템 단위 생성 시도
+## 2026-10-02 — Colab 재연결 환경 복구 및 MusiConGen 드럼 스템 생성 시도
 
-목표 스템(drums)만 재생성하려고 그 스템을 생성 조건으로 직접 전달했다가 음질이 저하됐다. MusicGen 계열 모델이 스템 단위 생성을 지원하지 않아 구조적으로 불가능한 접근이었고, "전체 트랙 생성 → Demucs 재분리 → 목표 스템 추출" 구조로 정정했다.
+Colab 재연결 후 환경을 복구하고, 목표 스템(drums)만 재생성하는 접근을 시도했다. 복구 과정의 의존성·환경 문제 5건과, 스템 단위 생성 시도에서 드러난 구조적 결함 1건, 그 과정의 측정 도구 오류 1건.
 
 ### 목록
 
-1. [MusiConGen에 목표 스템을 생성 조건으로 전달해 음질이 저하된 문제](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261002_musicongendrumstemqualitydegradation.md)
+1. [audiocraft import 시 ModuleNotFoundError('av') — 일괄 설치 중 조용한 실패](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261002_avmodulequietinstallfailure.md)
+2. [Colab 재연결 복구 시 이미 폐기된 conda(stemremix) 분기를 실행해서 발생한 에러](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261002_deadcondabranchreconnectrecovery.md)
+3. [librosa beat_track() tempo 배열 반환으로 인한 TypeError — madmom 대체 함수 작성 중](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261002_librosabeattracktempoarraytypeerror.md)
+4. [librosa 스템 BPM이 원곡의 정확히 2배로 추정됨 — 템포 옥타브 오류](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261002_librosatempooctaveerror.md) — 2026-10-30에 동일 오류의 재현 사례를 추가 병합
+5. [MusicGen 체크포인트 로드 시 HFValidationError — ckpt_dir 상대경로/절대경로 불일치](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261002_musicgenckptdirpathmismatch.md)
+6. [MusiConGen 드럼 스템 코드 조건화 생성 — 음질 저하(노이즈·템포·화성·음색 전부 불일치)](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261002_musicongendrumstemqualitydegradation.md) — 스템 단위 생성이 구조적으로 불가능함을 확인한 건
+7. [pandas/numba를 --no-deps로 묶어 재설치했다가 llvmlite 버전 불일치 재발](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261002_numballvmlitenodepsversionconflict.md)
+
+### 핵심 요약
+
+목표 스템만 생성 조건으로 직접 전달했다가 음질이 저하됐다. MusicGen 계열 모델이 스템 단위 생성을 지원하지 않아 구조적으로 불가능한 접근이었고, "전체 트랙 생성 → Demucs 재분리 → 목표 스템 추출" 구조로 정정했다.
+
+이 시도 전후로 Colab 재연결 복구 과정의 의존성 문제가 5건 함께 발생했다. numpy 버전을 구버전 의존성(hydra-core, flashy) 쪽으로 고정하면 torch/transformers가 깨지고, 되돌리면 pandas/numba가 깨지는 왕복이 반복됐다. `--no-deps`로 묶어 설치해 우회하려다 llvmlite 버전 불일치를 재발시킨 건과, 설치 대상에 포함돼 있던 `av`가 조용히 실패한 건이 그 과정에서 나왔다.
+
+### 시사점
+
+- 모델의 학습 조건을 벗어난 입력을 조건으로 넣으면 에러 없이 품질만 저하되는 경우가 있다. 생성이 끝났다는 것과 조건이 유효했다는 것은 다르다.
+- 일괄 설치는 개별 패키지의 실패를 가린다. 설치 후 import까지 확인하는 단계가 없으면 실패를 다음 단계에서 발견한다.
+- 의존성 충돌을 버전 고정으로 왕복하며 풀면 끝나지 않는다. 한 번 성공한 조합을 스냅샷으로 떠서 그것을 복구의 유일한 입력으로 삼는 쪽이 비용이 낮다.
 
 ---
 
 ## 2026-10-30 — 조건부 음악 생성의 음질 저하 원인 분해
 
-조건부 음악 생성 모델(MusiConGen)에 원곡의 코드 진행·BPM을 조건으로 넣어 백킹 트랙을 재생성. 결과물의 잡음이 심해 비트와 코드 진행을 판별할 수 없었고 평가 지표 측정이 막혔다. 원인을 분해하며 확인한 6건.
+조건부 음악 생성 모델(MusiConGen)에 원곡의 코드 진행·BPM을 조건으로 넣어 백킹 트랙을 재생성. 결과물의 잡음이 심해 비트와 코드 진행을 판별할 수 없었고 평가 지표 측정이 막혔다. 원인을 분해하며 확인한 5건.
 
-**6건 중 5건은 에러를 내지 않는다.** 예외도 경고도 없이 잘못된 값이나 상태로 진행된다. 각 문서의 "에러" 절에는 로그 대신 관측값을 싣고, 로그가 없다는 사실을 함께 적었다.
+**5건 중 4건은 에러를 내지 않는다.** 예외도 경고도 없이 잘못된 값이나 상태로 진행된다. 각 문서의 "에러" 절에는 로그 대신 관측값을 싣고, 로그가 없다는 사실을 함께 적었다.
 
 ### 목록
 
 1. [생성 길이가 학습 segment_duration과 다르면 조건의 prepend 경로가 무시되는 문제](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261030_conditionfuserhardcodedconditionlength.md) — 코드 결함 기여분을 특정한 건
-2. [librosa.beat.beat_track이 start_bpm 없이 호출되면 템포를 2배로 측정하는 문제](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261030_librosabeattrackoctaveerror.md) — 측정 도구 자체의 함정
-3. [비트 간격을 프레임 정수로 계산하면 지시한 BPM과 실제 BPM이 달라지는 문제](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261030_beatgapintegerfloortempodrift.md) — 버그가 아니라 양자화의 필연적 결과
-4. [589바이트짜리 코덱 체크포인트를 파일 손상으로 오판한 문제](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261030_encodeccompressionstatedictpointerfile.md) — 실제로는 Hub 참조 포인터
-5. [저장소의 requirements.txt를 그대로 설치하면 Colab 환경이 깨지는 문제](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261030_musicongencolabenvironmentrecovery.md) — 복구를 5셀로 고정
-6. [노트북 재생 위젯의 base64 오디오가 저장소에 커밋되는 문제](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261030_notebookoutputbase64audiocommitbloat.md)
+2. [비트 간격을 프레임 정수로 계산하면 지시한 BPM과 실제 BPM이 달라지는 문제](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261030_beatgapintegerfloortempodrift.md) — 버그가 아니라 양자화의 필연적 결과
+3. [589바이트짜리 코덱 체크포인트를 파일 손상으로 오판한 문제](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261030_encodeccompressionstatedictpointerfile.md) — 실제로는 Hub 참조 포인터
+4. [저장소의 requirements.txt를 그대로 설치하면 Colab 환경이 깨지는 문제](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261030_musicongencolabenvironmentrecovery.md) — 복구를 5셀로 고정
+5. [노트북 재생 위젯의 base64 오디오가 저장소에 커밋되는 문제](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261030_notebookoutputbase64audiocommitbloat.md)
+
+측정 과정에서 librosa 옥타브 오류(BPM 2배 오측정)도 재현됐으나, 2026-10-02 묶음의 [동일 문제 문서](https://github.com/finneKIM/stem-remix-assistant/blob/main/docs/troubleshooting/20261002_librosatempooctaveerror.md)에 추가 사례로 병합했다.
 
 ### 핵심 요약
 
@@ -76,7 +95,7 @@ madmom은 오래된 코드베이스(대략 Python 3.6~3.8 / numpy 1.x대 기준)
 
 이 분해는 측정 설계 없이는 불가능했다. 지표를 세 개(spectral flatness, 8kHz 이상 에너지 비율, HPSS 타격음 비율) 두고 교차로 읽었다. `cfg_coef`를 3.0에서 1.5로 낮춘 실험에서 flatness는 +2.0%로 사실상 불변이었고 타격음 비율은 −37.3%였다. 귀로는 "멜로디가 선명해졌다"로 들렸다. flatness만 봤다면 "변화 없음", 타격음 비율만 봤다면 "37% 개선"으로 각각 오판한다. 두 지표를 함께 봐야 잡음 총량은 같고 성분 분포만 바뀌었다는 해석이 나온다.
 
-2번 librosa 옥타브 오류도 같은 방식으로 찾았다. flatness와 고역 에너지는 같은 방향인데 BPM만 반대로 튀었고, 그래서 대상이 아니라 측정 쪽을 의심했다.
+2026-10-02 묶음의 librosa 옥타브 오류도 같은 방식으로 찾았다. flatness와 고역 에너지는 같은 방향인데 BPM만 반대로 튀었고, 그래서 대상이 아니라 측정 쪽을 의심했다.
 
 ### 시사점
 
