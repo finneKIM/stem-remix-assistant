@@ -253,9 +253,32 @@ Colab은 노트북 1개가 VM 1개에 대응하므로 분리 축을 파이프라
 
 로컬 VSCode 및 Colab 하이브리드 작업 방식과 세션 복구 절차 상세는 [`docs/ENVIRONMENT_SETUP.md`](docs/ENVIRONMENT_SETUP.md) 참고.
 
+### 7.3 측정만 재현 (GPU 불필요)
+
+모델 로드 없이 음질 진단 지표 계산을 로컬에서 바로 확인하는 경로.
+
+```bash
+git clone https://github.com/finneKIM/stem-remix-assistant.git
+cd stem-remix-assistant
+pip install librosa numpy
+python -c "from src.audio_metrics import measure; print(measure('docs/samples/draft_0.wav', hint_bpm=90))"
+```
+
+| 항목 | 기대값 | 대조 위치 |
+|---|---|---|
+| flatness | 0.00679 | [4.1 측정값](#41-측정값) 원곡 행 |
+| sec | 15.0 | `docs/samples/README.md` |
+
+`hint_bpm` 은 반드시 넘긴다. 생략하면 `librosa.beat.beat_track` 이 옥타브 오류로 2배 템포를 낼 수 있음([5. 알려진 함정](#5-알려진-함정)).
+
+저장소에서 재현되는 것은 원곡 행뿐. 코덱 왕복 · 공식 설정 대조군 기준 음원은 Google Drive에 보관하며 저장소에 포함하지 않음.
+
+hi8k 등 다른 지표는 librosa 버전에 따라 소수 넷째 자리에서 차이가 날 수 있어 기대값에서 제외.
+
 ## 8. 폴더 구조
 
 ```
+LICENSE                     # MIT. 저장소 코드 · 문서에만 적용 (11절)
 docs/
   PROPOSAL.md               # 기획서
   ENVIRONMENT_SETUP.md      # 환경 세팅 가이드
@@ -314,14 +337,28 @@ experiments/                # 실험별 config, 결과, 결론 기록 (규칙은
 
 ## 11. 라이선스
 
-저장소 코드 자체의 라이선스는 미정.
+저장소 코드(노트북 · `src/` · 문서)는 [MIT License](LICENSE).
 
-파이프라인이 사용하는 모델 가중치는 각각 별도 라이선스가 적용됨.
+MIT 라이선스는 이 저장소에서 작성한 코드와 문서에만 적용됨. 아래 외부 코드 · 모델 가중치와 그 가중치로 생성한 음원(`docs/samples/`)은 각 원 라이선스를 따름.
 
-| 구성 요소 | 라이선스 | 상업적 이용 |
+### 11.1 코드 · 라이브러리
+
+| 구성 요소 | 라이선스 | 조건 |
 |---|---|---|
-| MusicGen · MusiConGen 가중치 | CC-BY-NC 계열 | 불가 |
-| Demucs · librosa · BTC-ISMIR2019 | 오픈소스 | 제약 없음 |
+| audiocraft (MusicGen 코드) | MIT | 저작권 · 허가 고지 유지 |
+| MusiConGen 코드 (YatingMusic/MusiConGen) | MIT | 저작권 · 허가 고지 유지 |
+| Demucs | MIT | 저작권 · 허가 고지 유지 |
+| BTC-ISMIR19 | MIT | 저작권 · 허가 고지 유지 |
+| librosa | ISC | 저작권 · 허가 고지 유지 |
+
+### 11.2 모델 가중치
+
+| 가중치 | 모델 카드 표기 | 상업적 이용 |
+|---|---|---|
+| MusicGen (`facebook/musicgen-stereo-medium` · `facebook/musicgen-melody`) | CC-BY-NC 4.0 | 불가 |
+| MusiConGen (`Cyan0731/MusiConGen`) | MIT | 모델 카드 표기는 MIT이나 CC-BY-NC 4.0인 MusicGen-melody를 파인튜닝한 가중치이므로 비상업 용도로만 사용 |
+
+코드와 가중치의 라이선스가 다르므로 둘을 구분해 확인.
 
 본 파이프라인은 비상업적 데모 및 포트폴리오 용도로 한정.
 

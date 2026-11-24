@@ -14,6 +14,14 @@
 이 파일을 수정할 때는 반드시 _reference/ 의 기준선을 재측정해
 아래 BASELINE 값과 일치하는지 확인한다. 값이 달라지면 과거 모든
 측정값을 재측정해야 한다.
+
+경로 안내
+---------
+위 import 예시의 /content/repo 는 Colab에서 저장소를 clone한 위치다.
+로컬에서는 저장소 루트에서 바로 `from src.audio_metrics import measure` 로 쓴다.
+_reference/ (코덱 왕복 · 공식 설정 대조군 기준 음원)는 Google Drive에만 있고
+저장소에는 없다. 저장소만으로 재현되는 기준선은 원곡(docs/samples/draft_0.wav)
+하나이며 README 7.3절에 절차와 기대값이 있다.
 """
 
 import numpy as np
